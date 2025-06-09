@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/storage"
@@ -23,26 +22,24 @@ type Event struct {
 
 func main() {
 	var (
-		topic           string
-		cacheControl    string
-		projectID       string
-		shutdownTimeout time.Duration
+		projectID    string = os.Getenv("GOOGLE_CLOUD_PROJECT")
+		topic        string
+		cacheControl string
 	)
-	flag.StringVar(&topic, "topic", "", "PubSub topic name to listen to bucket events")
+	flag.StringVar(&projectID, "project", "", "project ID")
+	flag.StringVar(&topic, "topic", "", "PubSub topic name to listen for Cloud Storage events")
 	flag.StringVar(&cacheControl, "cache-control", "", "Cache-Control string to set")
-	flag.StringVar(&projectID, "project-id", "", "project ID")
-	flag.DurationVar(&shutdownTimeout, "shutdown-timeout", time.Minute, "shutdown timeout")
 	flag.Parse()
 
 	if topic == "" || cacheControl == "" || projectID == "" {
-		log.Fatal("topic, cache-control, and project-id are required")
+		log.Fatal("topic, cache-control, and project are required")
 	}
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
 	ctx := context.Background()
 
-	cloudStorageClient, err := storage.NewClient(ctx)
+	cloudstorageClient, err := storage.NewClient(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,7 +48,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer pubsubClient.Close()
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -66,7 +62,7 @@ func main() {
 		}
 
 		attrs := storage.ObjectAttrsToUpdate{CacheControl: cacheControl}
-		if _, err := cloudStorageClient.Bucket(e.Bucket).Object(e.Name).Update(ctx, attrs); err != nil {
+		if _, err := cloudstorageClient.Bucket(e.Bucket).Object(e.Name).Update(ctx, attrs); err != nil {
 			slog.ErrorContext(ctx, "cannot update object attributes", "topic", topic, "error", err, "bucket", e.Bucket, "name", e.Name)
 			m.Nack()
 			return
