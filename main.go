@@ -11,7 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/pubsub/v2"
 	"cloud.google.com/go/storage"
 )
 
@@ -53,7 +53,7 @@ func main() {
 
 	slog.InfoContext(ctx, "starting worker", "topic", topic)
 
-	if err := pubsubClient.Subscription(topic).Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
+	if err := pubsubClient.Subscriber(topic).Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
 		var e Event
 		if err := json.Unmarshal(m.Data, &e); err != nil {
 			slog.ErrorContext(ctx, "cannot decode message", "topic", topic, "error", err)
