@@ -15,18 +15,9 @@ import (
 	"cloud.google.com/go/storage"
 )
 
-type Event struct {
-	Bucket string `json:"bucket"`
-	Name   string `json:"name"`
-}
-
 func main() {
-	var (
-		projectID    string = os.Getenv("GOOGLE_CLOUD_PROJECT")
-		topic        string
-		cacheControl string
-	)
-	flag.StringVar(&projectID, "project", "", "project ID")
+	var projectID, topic, cacheControl string
+	flag.StringVar(&projectID, "project_id", os.Getenv("PROJECT_ID"), "GCP Project ID")
 	flag.StringVar(&topic, "topic", "", "PubSub topic name to listen for Cloud Storage events")
 	flag.StringVar(&cacheControl, "cache-control", "", "Cache-Control string to set")
 	flag.Parse()
@@ -54,7 +45,10 @@ func main() {
 	slog.InfoContext(ctx, "starting worker", "topic", topic)
 
 	if err := pubsubClient.Subscriber(topic).Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
-		var e Event
+		var e struct {
+			Bucket string `json:"bucket"`
+			Name   string `json:"name"`
+		}
 		if err := json.Unmarshal(m.Data, &e); err != nil {
 			slog.ErrorContext(ctx, "cannot decode message", "topic", topic, "error", err)
 			m.Nack()
