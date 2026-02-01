@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	cloud.google.com/go/pubsub/v2 v2.3.0
-	cloud.google.com/go/storage v1.58.0
+	cloud.google.com/go/storage v1.59.2
 )
 
 require (
