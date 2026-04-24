@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"cloud.google.com/go/pubsub/v2"
@@ -42,29 +43,33 @@ func main() {
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	slog.InfoContext(ctx, "starting worker", "topic", topic)
+	for topic := range strings.SplitSeq(topic, ",") {
+		slog.InfoContext(ctx, "starting worker", "topic", topic)
 
-	if err := pubsubClient.Subscriber(topic).Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
-		var e struct {
-			Bucket string `json:"bucket"`
-			Name   string `json:"name"`
-		}
-		if err := json.Unmarshal(m.Data, &e); err != nil {
-			slog.ErrorContext(ctx, "cannot decode message", "topic", topic, "error", err)
-			m.Nack()
-			return
-		}
+		go func(topic string) {
+			if err := pubsubClient.Subscriber(topic).Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
+				var e struct {
+					Bucket string `json:"bucket"`
+					Name   string `json:"name"`
+				}
+				if err := json.Unmarshal(m.Data, &e); err != nil {
+					slog.ErrorContext(ctx, "cannot decode message", "topic", topic, "error", err)
+					m.Nack()
+					return
+				}
 
-		attrs := storage.ObjectAttrsToUpdate{CacheControl: cacheControl}
-		if _, err := cloudstorageClient.Bucket(e.Bucket).Object(e.Name).Update(ctx, attrs); err != nil {
-			slog.ErrorContext(ctx, "cannot update object attributes", "topic", topic, "error", err, "bucket", e.Bucket, "name", e.Name)
-			m.Nack()
-			return
-		}
+				attrs := storage.ObjectAttrsToUpdate{CacheControl: cacheControl}
+				if _, err := cloudstorageClient.Bucket(e.Bucket).Object(e.Name).Update(ctx, attrs); err != nil {
+					slog.ErrorContext(ctx, "cannot update object attributes", "topic", topic, "error", err, "bucket", e.Bucket, "name", e.Name)
+					m.Nack()
+					return
+				}
 
-		m.Ack()
-	}); err != nil && !errors.Is(err, context.Canceled) {
-		log.Fatalf("cannot consume message: topic=%s error=%s", topic, err)
+				m.Ack()
+			}); err != nil && !errors.Is(err, context.Canceled) {
+				log.Fatalf("cannot consume message: topic=%s error=%s", topic, err)
+			}
+		}(topic)
 	}
 
 	// graceful shutdown
@@ -78,5 +83,5 @@ func main() {
 
 	<-ctx.Done()
 
-	slog.InfoContext(ctx, "worker stopped: ok", "topic", topic)
+	slog.InfoContext(ctx, "worker stopped: ok")
 }
